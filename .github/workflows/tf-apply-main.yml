@@ -11,6 +11,10 @@ on:
         - module-1
         - module-2
         required: true
+      student_id:
+        description: "Student/lab instance ID for multi-student deployment (e.g. student-01). Leave empty for single default deployment."
+        required: false
+        type: string
 
 permissions: write-all
 
@@ -37,20 +41,23 @@ jobs:
       with:
         terraform_version: 1.10.5
 
-    - name: Set Account ID
+    - name: Set Account ID and Student ID
       id: account
       run: |
         echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+        echo "STUDENT_ID=${{ github.event.inputs.student_id || 'default' }}" >> $GITHUB_ENV
 
-    - name: Check previous AWSGoat Deployment
+    - name: Check previous AWSGoat Deployment (default only)
       id: check 
       run: |
         echo ${{ env.ACCOUNT_ID }}
-        aws s3api head-object --bucket do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }} --key terraform.tfstate
+        if [ "${{ env.STUDENT_ID }}" = "default" ]; then
+          aws s3api head-object --bucket do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }} --key terraform.tfstate
+        fi
       continue-on-error: true
 
     - name: Exit if previous deployment exists
-      if: steps.check.outcome == 'success' 
+      if: env.STUDENT_ID == 'default' && steps.check.outcome == 'success'
       run: |
         echo "A Previous AWSGoat deployment exists, run the Terraform Destroy Action"
         exit 1
@@ -60,6 +67,20 @@ jobs:
       run: | 
         cd modules/${{ github.event.inputs.module }}
         terraform init 
+
+    - name: Terraform Workspace (multi-student)
+      if: env.STUDENT_ID != 'default'
+      run: |
+        cd modules/${{ github.event.inputs.module }}
+        terraform workspace select ${{ env.STUDENT_ID }} 2>/dev/null || terraform workspace new ${{ env.STUDENT_ID }}
+
+    - name: Restore state for student (multi-student)
+      if: env.STUDENT_ID != 'default'
+      run: |
+        cd modules/${{ github.event.inputs.module }}
+        mkdir -p .terraform.tfstate.d/${{ env.STUDENT_ID }}
+        aws s3 cp s3://do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}/terraform.tfstate.${{ env.STUDENT_ID }} .terraform.tfstate.d/${{ env.STUDENT_ID }}/terraform.tfstate 2>/dev/null || true
+      continue-on-error: true
         
     # Installs boto3
     - uses: actions/setup-python@v5
@@ -73,7 +94,7 @@ jobs:
       id: plan 
       run: | 
         cd modules/${{ github.event.inputs.module }}
-        terraform plan -input=false
+        terraform plan -input=false -var="student_id=${{ env.STUDENT_ID }}"
       continue-on-error: false
       
     - name: Terraform Plan Status
@@ -83,7 +104,7 @@ jobs:
     - name: Terraform Apply
       run: | 
         cd modules/${{ github.event.inputs.module }}
-        terraform apply -auto-approve -input=false
+        terraform apply -auto-approve -input=false -var="student_id=${{ env.STUDENT_ID }}"
       continue-on-error: false
 
     # Copy tfstate file to s3 bucket
@@ -91,7 +112,11 @@ jobs:
       if: always()
       run: |
         cd modules/${{ github.event.inputs.module }}
-        aws s3 cp ./terraform.tfstate s3://do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}/terraform.tfstate 
+        if [ "${{ env.STUDENT_ID }}" = "default" ]; then
+          aws s3 cp ./terraform.tfstate s3://do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}/terraform.tfstate
+        else
+          aws s3 cp .terraform.tfstate.d/${{ env.STUDENT_ID }}/terraform.tfstate s3://do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}/terraform.tfstate.${{ env.STUDENT_ID }}
+        fi 
 
     # Terraform Output the API Gateway url
     - name: Application URL

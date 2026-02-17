@@ -10,6 +10,10 @@ on:
         - module-1
         - module-2
         required: true
+      student_id:
+        description: "Student/lab instance ID (must match the one used for deploy). Leave empty for default."
+        required: false
+        type: string
 
 permissions: write-all
 
@@ -37,25 +41,39 @@ jobs:
       with:
         terraform_version: 1.10.5
     
-    - name: Set Account ID
+    - name: Set Account ID and Student ID
       id: account
       run: |
         echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+        echo "STUDENT_ID=${{ github.event.inputs.student_id || 'default' }}" >> $GITHUB_ENV
 
-    # Copy and delete terraform.tfstate files from s3 bucket
-    - name: Retrieve tfstate
+    # Copy terraform.tfstate from S3 (default: single file; multi-student: after init+workspace)
+    - name: Retrieve tfstate (default)
+      if: env.STUDENT_ID == 'default'
       run: |
         cd modules/${{ github.event.inputs.module }}
         aws s3 cp s3://do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}/terraform.tfstate ./terraform.tfstate
 
-    # Initialize a new Terraform working directory
+    # Initialize Terraform (required before workspace exists for multi-student)
     - name: Terraform Init
       run: |
         cd modules/${{ github.event.inputs.module }}
         terraform init
+
+    - name: Terraform Workspace (multi-student)
+      if: env.STUDENT_ID != 'default'
+      run: |
+        cd modules/${{ github.event.inputs.module }}
+        terraform workspace select ${{ env.STUDENT_ID }} 2>/dev/null || terraform workspace new ${{ env.STUDENT_ID }}
+
+    - name: Retrieve tfstate (multi-student)
+      if: env.STUDENT_ID != 'default'
+      run: |
+        cd modules/${{ github.event.inputs.module }}
+        aws s3 cp s3://do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}/terraform.tfstate.${{ env.STUDENT_ID }} .terraform.tfstate.d/${{ env.STUDENT_ID }}/terraform.tfstate
     
     - name: Terraform Destroy
       run: |
         cd modules/${{ github.event.inputs.module }}
-        terraform destroy -auto-approve -input=false
+        terraform destroy -auto-approve -input=false -var="student_id=${{ env.STUDENT_ID }}"
       continue-on-error: false

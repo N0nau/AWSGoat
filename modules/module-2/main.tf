@@ -13,6 +13,10 @@ provider "aws" {
 
 data "aws_caller_identity" "current" {}
 
+locals {
+  name_suffix = var.student_id == "default" ? "" : "-${lower(replace(var.student_id, "_", "-"))}"
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -66,7 +70,7 @@ resource "aws_route_table_association" "my_vpc_us_east_1b_public" {
 }
 
 resource "aws_security_group" "ecs_sg" {
-  name        = "ECS-SG"
+  name        = "ECS-SG${local.name_suffix}"
   description = "SG for cluster created from terraform"
   vpc_id      = aws_vpc.lab-vpc.id
 
@@ -171,7 +175,7 @@ resource "aws_security_group" "load_balancer_security_group" {
 
 
 resource "aws_iam_role" "ecs-instance-role" {
-  name                 = "ecs-instance-role"
+  name                 = "ecs-instance-role${local.name_suffix}"
   path                 = "/"
   permissions_boundary = aws_iam_policy.instance_boundary_policy.arn
   assume_role_policy = jsonencode({
@@ -205,7 +209,7 @@ resource "aws_iam_role_policy_attachment" "ecs-instance-role-attachment-3" {
 }
 
 resource "aws_iam_policy" "ecs_instance_policy" {
-  name = "aws-goat-instance-policy"
+  name = "aws-goat-instance-policy${local.name_suffix}"
   policy = jsonencode({
     "Statement" : [
       {
@@ -225,7 +229,7 @@ resource "aws_iam_policy" "ecs_instance_policy" {
 }
 
 resource "aws_iam_policy" "instance_boundary_policy" {
-  name = "aws-goat-instance-boundary-policy"
+  name = "aws-goat-instance-boundary-policy${local.name_suffix}"
   policy = jsonencode({
     "Statement" : [
       {
@@ -253,12 +257,12 @@ resource "aws_iam_policy" "instance_boundary_policy" {
 }
 
 resource "aws_iam_instance_profile" "ec2-deployer-profile" {
-  name = "ec2Deployer"
+  name = "ec2Deployer${local.name_suffix}"
   path = "/"
   role = aws_iam_role.ec2-deployer-role.id
 }
 resource "aws_iam_role" "ec2-deployer-role" {
-  name = "ec2Deployer-role"
+  name = "ec2Deployer-role${local.name_suffix}"
   path = "/"
   assume_role_policy = jsonencode({
     "Version" : "2008-10-17",
@@ -276,7 +280,7 @@ resource "aws_iam_role" "ec2-deployer-role" {
 }
 
 resource "aws_iam_policy" "ec2_deployer_admin_policy" {
-  name = "ec2DeployerAdmin-policy"
+  name = "ec2DeployerAdmin-policy${local.name_suffix}"
   policy = jsonencode({
     "Statement" : [
       {
@@ -298,12 +302,12 @@ resource "aws_iam_role_policy_attachment" "ec2-deployer-role-attachment" {
 }
 
 resource "aws_iam_instance_profile" "ecs-instance-profile" {
-  name = "ecs-instance-profile"
+  name = "ecs-instance-profile${local.name_suffix}"
   path = "/"
   role = aws_iam_role.ecs-instance-role.id
 }
 resource "aws_iam_role" "ecs-task-role" {
-  name = "ecs-task-role"
+  name = "ecs-task-role${local.name_suffix}"
   path = "/"
   assume_role_policy = jsonencode({
     "Version" : "2012-10-17",
@@ -361,7 +365,7 @@ resource "aws_launch_template" "ecs_launch_template" {
 }
 
 resource "aws_autoscaling_group" "ecs_asg" {
-  name                = "ECS-lab-asg"
+  name                = "ECS-lab-asg${local.name_suffix}"
   vpc_zone_identifier = [aws_subnet.lab-subnet-public-1.id]
   desired_capacity    = 1
   min_size            = 0
@@ -375,10 +379,10 @@ resource "aws_autoscaling_group" "ecs_asg" {
 
 
 resource "aws_ecs_cluster" "cluster" {
-  name = "ecs-lab-cluster"
+  name = "ecs-lab-cluster${local.name_suffix}"
 
   tags = {
-    name = "ecs-cluster-name"
+    name = "ecs-cluster-name${local.name_suffix}"
   }
 }
 
@@ -388,7 +392,7 @@ data "template_file" "user_data" {
 
 resource "aws_ecs_task_definition" "task_definition" {
   container_definitions    = data.template_file.task_definition_json.rendered
-  family                   = "ECS-Lab-Task-definition"
+  family                   = "ECS-Lab-Task-definition${local.name_suffix}"
   network_mode             = "bridge"
   memory                   = "512"
   cpu                      = "512"
@@ -416,7 +420,7 @@ data "template_file" "task_definition_json" {
 
 
 resource "aws_ecs_service" "worker" {
-  name                              = "ecs_service_worker"
+  name                              = "ecs_service_worker${local.name_suffix}"
   cluster                           = aws_ecs_cluster.cluster.id
   task_definition                   = aws_ecs_task_definition.task_definition.arn
   desired_count                     = 1
@@ -424,14 +428,14 @@ resource "aws_ecs_service" "worker" {
 
   load_balancer {
     target_group_arn = aws_lb_target_group.target_group.arn
-    container_name   = "aws-goat-m2"
+    container_name   = "aws-goat-m2${local.name_suffix}"
     container_port   = 80
   }
   depends_on = [aws_lb_listener.listener]
 }
 
 resource "aws_alb" "application_load_balancer" {
-  name               = "aws-goat-m2-alb"
+  name               = "aws-goat-m2-alb${local.name_suffix}"
   internal           = false
   load_balancer_type = "application"
   subnets            = [aws_subnet.lab-subnet-public-1.id, aws_subnet.lab-subnet-public-1b.id]
@@ -443,7 +447,7 @@ resource "aws_alb" "application_load_balancer" {
 }
 
 resource "aws_lb_target_group" "target_group" {
-  name        = "aws-goat-m2-tg"
+  name        = "aws-goat-m2-tg${local.name_suffix}"
   port        = 80
   protocol    = "HTTP"
   target_type = "instance"
@@ -524,4 +528,19 @@ resource "aws_s3_bucket" "bucket_tf_files" {
 
 output "ad_Target_URL" {
   value = "${aws_alb.application_load_balancer.dns_name}:80/login.php"
+}
+
+output "student_id" {
+  description = "Student/lab instance ID (for multi-student; use in attack manuals for role names)"
+  value       = var.student_id
+}
+
+output "privesc_role_names" {
+  description = "IAM role/instance profile names used in IAM Privilege Escalation scenario (attack-manuals/module-2/04-IAM Privilege Escalation.md)"
+  value = {
+    ecs_instance_role   = aws_iam_role.ecs-instance-role.name
+    ec2_deployer_profile = aws_iam_instance_profile.ec2-deployer-profile.name
+    ec2_deployer_role    = aws_iam_role.ec2-deployer-role.name
+    boundary_policy     = aws_iam_policy.instance_boundary_policy.name
+  }
 }

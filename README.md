@@ -114,6 +114,33 @@ terraform init
 terraform apply --auto-approve
 ```
 
+### Multi-Student Deployment
+
+You can deploy **multiple isolated lab instances** in the same AWS account (e.g. one per student). This is especially important for **privilege escalation scenarios**: each student gets their own IAM roles, S3 buckets, EC2/ECS resources, and escalation path so they do not interfere with each other.
+
+**GitHub Actions**
+
+- When running **Terraform Apply**, optionally set **Student ID** (e.g. `student-01`, `student-02`). Leave empty for a single default deployment.
+- When running **Terraform Destroy**, use the same **Student ID** you used for that deployment.
+- State is stored per student: `terraform.tfstate` (default) or `terraform.tfstate.<student_id>`.
+
+**Manual (CLI)**
+
+- Single deployment (unchanged):
+  ```sh
+  cd modules/module-<Number>
+  terraform init
+  terraform apply -auto-approve
+  ```
+- Per-student deployment using [Terraform workspaces](https://developer.hashicorp.com/terraform/language/state/workspaces):
+  ```sh
+  cd modules/module-<Number>
+  terraform init
+  terraform workspace new student-01   # or: terraform workspace select student-01
+  terraform apply -auto-approve -var="student_id=student-01"
+  ```
+- Resource names are suffixed with the student ID (e.g. `AWS_GOAT_ROLE-student-01`, `blog_app_lambda_data-student-01`, `ecs-instance-role-student-01`, `ec2Deployer-role-student-01`). Attack manuals use the same steps; use the role/bucket names from your deployment (or the suffix shown in Terraform output).
+
 # Modules
 
 ## Module 1

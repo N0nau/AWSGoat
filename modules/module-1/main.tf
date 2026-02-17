@@ -22,7 +22,7 @@ data "archive_file" "lambda_zip" {
 
 resource "aws_lambda_function" "react_lambda_app" {
   filename      = "resources/lambda/out/reactapp.zip"
-  function_name = "blog-application"
+  function_name = "blog-application${local.name_suffix}"
   handler       = "index.handler"
   runtime       = "nodejs18.x"
   role          = aws_iam_role.blog_app_lambda.arn
@@ -33,7 +33,7 @@ resource "aws_lambda_function" "react_lambda_app" {
 /* Lambda iam Role */
 
 resource "aws_iam_role" "blog_app_lambda" {
-  name = "blog_app_lambda"
+  name = "blog_app_lambda${local.name_suffix}"
 
   assume_role_policy = <<EOF
 {
@@ -64,7 +64,7 @@ resource "aws_iam_role_policy_attachment" "ba_lambda_attach_3" {
 
 
 resource "aws_api_gateway_rest_api" "api" {
-  name = "blog-application"
+  name = "blog-application${local.name_suffix}"
   endpoint_configuration {
     types = [
       "REGIONAL"
@@ -170,7 +170,7 @@ resource "aws_api_gateway_stage" "api" {
 
 
 resource "aws_api_gateway_rest_api" "apiLambda_ba" {
-  name           = "blog-application-api"
+  name           = "blog-application-api${local.name_suffix}"
   api_key_source = "HEADER"
   endpoint_configuration {
     types = [
@@ -3082,7 +3082,7 @@ resource "aws_lambda_layer_version" "lambda_layer" {
 
 resource "aws_lambda_function" "lambda_ba_data" {
   filename      = "resources/lambda/out/data_app.zip"
-  function_name = "blog-application-data"
+  function_name = "blog-application-data${local.name_suffix}"
   handler       = "lambda_function.lambda_handler"
   runtime       = "python3.9"
   role          = aws_iam_role.blog_app_lambda_python.arn
@@ -3091,7 +3091,9 @@ resource "aws_lambda_function" "lambda_ba_data" {
   memory_size   = "256"
   environment {
     variables = {
-      JWT_SECRET = "T2BYL6#]zc>Byuzu"
+      JWT_SECRET   = "T2BYL6#]zc>Byuzu"
+      USERS_TABLE  = aws_dynamodb_table.users_table.name
+      POSTS_TABLE  = aws_dynamodb_table.posts_table.name
     }
   }
 }
@@ -3100,7 +3102,7 @@ resource "aws_lambda_function" "lambda_ba_data" {
 /* Lambda iam Role */
 
 resource "aws_iam_role" "blog_app_lambda_python" {
-  name = "blog_app_lambda_data"
+  name = "blog_app_lambda_data${local.name_suffix}"
 
   assume_role_policy = <<EOF
 {
@@ -3126,7 +3128,7 @@ resource "aws_iam_role_policy_attachment" "blog_app_policy" {
 }
 
 resource "aws_iam_policy" "lambda_data_policies" {
-  name = "lambda-data-policies"
+  name = "lambda-data-policies${local.name_suffix}"
   policy = jsonencode({
     "Statement" : [
       {
@@ -3175,6 +3177,8 @@ resource "aws_lambda_permission" "apigw_ba_python" {
 /* Local Variable for mime_types */
 
 locals {
+  # Suffix for multi-student deployment. S3 allows [a-z0-9.-]; IAM allows alphanumeric and +=,.@-
+  name_suffix = var.student_id == "default" ? "" : "-${lower(replace(var.student_id, "_", "-"))}"
   content_type_map = {
     html = "text/html",
     js   = "application/javascript",
@@ -3192,7 +3196,7 @@ locals {
 
 /* Creating a S3 Bucket for webfiles files upload. */
 resource "aws_s3_bucket" "bucket_upload" {
-  bucket        = "production-blog-awsgoat-bucket-${data.aws_caller_identity.current.account_id}"
+  bucket        = "production-blog-awsgoat-bucket-${data.aws_caller_identity.current.account_id}${local.name_suffix}"
   force_destroy = true
   tags = {
     Name        = "Production bucket"
@@ -3278,7 +3282,7 @@ resource "aws_s3_object" "upload_folder_prod" {
 
 #Development bucket
 resource "aws_s3_bucket" "dev" {
-  bucket = "dev-blog-awsgoat-bucket-${data.aws_caller_identity.current.account_id}"
+  bucket = "dev-blog-awsgoat-bucket-${data.aws_caller_identity.current.account_id}${local.name_suffix}"
 
   tags = {
     Name        = "Development bucket"
@@ -3358,7 +3362,7 @@ resource "aws_s3_object" "upload_folder_dev_2" {
 
 /* Creating a S3 Bucket for ec2-files upload. */
 resource "aws_s3_bucket" "bucket_temp" {
-  bucket        = "ec2-temp-bucket-${data.aws_caller_identity.current.account_id}"
+  bucket        = "ec2-temp-bucket-${data.aws_caller_identity.current.account_id}${local.name_suffix}"
   force_destroy = true
 
   tags = {
@@ -3482,18 +3486,18 @@ resource "aws_security_group" "goat_sg" {
   }
 
   tags = {
-    Name = "AWS_GOAT_sg"
+    Name = "AWS_GOAT_sg${local.name_suffix}"
   }
 }
 
 
 # Instance Requirements
 resource "aws_iam_instance_profile" "goat_iam_profile" {
-  name = "AWS_GOAT_ec2_profile"
+  name = "AWS_GOAT_ec2_profile${local.name_suffix}"
   role = aws_iam_role.goat_role.name
 }
 resource "aws_iam_role" "goat_role" {
-  name               = "AWS_GOAT_ROLE"
+  name               = "AWS_GOAT_ROLE${local.name_suffix}"
   path               = "/"
   assume_role_policy = <<EOF
 {
@@ -3523,7 +3527,7 @@ resource "aws_iam_role_policy_attachment" "goat_policy" {
 }
 
 resource "aws_iam_policy" "goat_inline_policy_2" {
-  name = "dev-ec2-lambda-policies"
+  name = "dev-ec2-lambda-policies${local.name_suffix}"
   policy = jsonencode({
     "Statement" : [
       {
@@ -3603,7 +3607,7 @@ resource "aws_instance" "goat_instance" {
   subnet_id            = aws_subnet.goat_subnet.id
   security_groups      = [aws_security_group.goat_sg.id]
   tags = {
-    Name = "AWS_GOAT_DEV_INSTANCE"
+    Name = "AWS_GOAT_DEV_INSTANCE${local.name_suffix}"
   }
   user_data = data.template_file.goat_script.rendered
   depends_on = [
@@ -3613,7 +3617,7 @@ resource "aws_instance" "goat_instance" {
 
 
 resource "aws_dynamodb_table" "users_table" {
-  name           = "blog-users"
+  name           = "blog-users${local.name_suffix}"
   billing_mode   = "PROVISIONED"
   read_capacity  = 2
   write_capacity = 2
@@ -3625,7 +3629,7 @@ resource "aws_dynamodb_table" "users_table" {
   }
 }
 resource "aws_dynamodb_table" "posts_table" {
-  name           = "blog-posts"
+  name           = "blog-posts${local.name_suffix}"
   billing_mode   = "PROVISIONED"
   read_capacity  = 2
   write_capacity = 2
@@ -3642,7 +3646,7 @@ resource "null_resource" "populate_table" {
   provisioner "local-exec" {
     command     = <<EOF
 sed -i 's/replace-bucket-name/${aws_s3_bucket.bucket_upload.bucket}/g' resources/dynamodb/blog-posts.json
-python3 resources/dynamodb/populate-table.py
+USERS_TABLE='${aws_dynamodb_table.users_table.name}' POSTS_TABLE='${aws_dynamodb_table.posts_table.name}' python3 resources/dynamodb/populate-table.py
 EOF
     interpreter = ["/bin/bash", "-c"]
   }
@@ -3714,5 +3718,21 @@ EOF
 
 output "app_url" {
   value = "${aws_api_gateway_stage.api.invoke_url}/react"
+}
+
+output "student_id" {
+  description = "Student/lab instance ID (for multi-student; use in attack manuals for role/bucket names)"
+  value       = var.student_id
+}
+
+output "privesc_role_names" {
+  description = "IAM role names used in IAM Privilege Escalation scenario (attack-manuals/module-1/07-IAM Privilege Escalation.md)"
+  value = {
+    ec2_instance_profile = aws_iam_instance_profile.goat_iam_profile.name
+    ec2_role              = aws_iam_role.goat_role.name
+    lambda_role           = aws_iam_role.blog_app_lambda_python.name
+    dev_ec2_policy        = aws_iam_policy.goat_inline_policy_2.name
+    lambda_data_policy    = aws_iam_policy.lambda_data_policies.name
+  }
 }
 
