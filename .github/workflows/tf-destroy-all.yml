@@ -88,3 +88,9 @@ jobs:
           done
 
           echo "=== Destroy all completed ==="
+
+      - name: Delete all resources tagged Project=AWSGoat
+        run: |
+          chmod +x scripts/delete-resources-by-tag-awsgoat.sh
+          ./scripts/delete-resources-by-tag-awsgoat.sh
+        continue-on-error: true
