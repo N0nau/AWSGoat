@@ -39,14 +39,22 @@ run_import() {
 }
 
 if [ "$MODULE" = "module-2" ]; then
+  # VPC (avoids VpcLimitExceeded when re-applying after partial run)
+  VPC_ID=$(aws ec2 describe-vpcs --region "$REGION" --filters "Name=tag:Name,Values=AWS_GOAT_VPC${SUFFIX}" --query 'Vpcs[0].VpcId' --output text 2>/dev/null || true)
+  [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ] && run_import "aws_vpc.lab-vpc" "$VPC_ID"
   run_import "aws_iam_policy.ecs_instance_policy" "arn:aws:iam::${ACCOUNT_ID}:policy/aws-goat-instance-policy${SUFFIX}"
   run_import "aws_iam_policy.instance_boundary_policy" "arn:aws:iam::${ACCOUNT_ID}:policy/aws-goat-instance-boundary-policy${SUFFIX}"
   run_import "aws_iam_role.ec2-deployer-role" "ec2Deployer-role${SUFFIX}"
   run_import "aws_iam_policy.ec2_deployer_admin_policy" "arn:aws:iam::${ACCOUNT_ID}:policy/ec2DeployerAdmin-policy${SUFFIX}"
   run_import "aws_iam_role.ecs-task-role" "ecs-task-role${SUFFIX}"
   run_import "aws_iam_role.ecs-instance-role" "ecs-instance-role${SUFFIX}"
-  # Secrets Manager: import by name (or ARN); name is RDS_CREDS + suffix
   run_import "aws_secretsmanager_secret.rds_creds" "RDS_CREDS${SUFFIX}"
+  run_import "aws_db_subnet_group.database-subnet-group" "database-subnets${SUFFIX}"
+  # ALB and target group: import by ARN (look up by name)
+  ALB_ARN=$(aws elbv2 describe-load-balancers --region "$REGION" --names "aws-goat-m2-alb${SUFFIX}" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || true)
+  [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ] && run_import "aws_alb.application_load_balancer" "$ALB_ARN"
+  TG_ARN=$(aws elbv2 describe-target-groups --region "$REGION" --names "aws-goat-m2-tg${SUFFIX}" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || true)
+  [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ] && run_import "aws_lb_target_group.target_group" "$TG_ARN"
   echo "Import step finished (module-2)."
 elif [ "$MODULE" = "module-1" ]; then
   # Add module-1 imports here if we see similar EntityAlreadyExists errors
