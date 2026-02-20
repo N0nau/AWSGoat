@@ -247,6 +247,43 @@ delete_iam_roles_and_policies() {
   done
 }
 
+# Fallback: delete IAM roles and policies created by module-1/module-2 by name pattern (catches untagged resources)
+delete_iam_awsgoat_by_name() {
+  local role_patterns="blog_app_lambda blog_app_lambda_data AWS_GOAT_ROLE ecs-instance-role ec2Deployer-role ecs-task-role"
+  local policy_patterns="lambda-data-policies dev-ec2-lambda-policies aws-goat-instance-policy aws-goat-instance-boundary-policy ec2DeployerAdmin-policy"
+  for prefix in $role_patterns; do
+    local roles
+    roles=$(aws iam list-roles --output json 2>/dev/null | jq -r --arg p "$prefix" '.Roles[] | select(.RoleName | startswith($p)) | .RoleName' 2>/dev/null) || true
+    for role in $roles; do
+      [ -z "$role" ] && continue
+      echo "Deleting IAM role (by name): $role"
+      for policy in $(aws iam list-attached-role-policies --role-name "$role" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null); do
+        aws iam detach-role-policy --role-name "$role" --policy-arn "$policy" 2>/dev/null || true
+      done
+      for inline in $(aws iam list-role-policies --role-name "$role" --query 'PolicyNames[]' --output text 2>/dev/null); do
+        aws iam delete-role-policy --role-name "$role" --policy-name "$inline" 2>/dev/null || true
+      done
+      for profile in $(aws iam list-instance-profiles-for-role --role-name "$role" --query 'InstanceProfiles[].InstanceProfileName' --output text 2>/dev/null); do
+        aws iam remove-role-from-instance-profile --instance-profile-name "$profile" --role-name "$role" 2>/dev/null || true
+        aws iam delete-instance-profile --instance-profile-name "$profile" 2>/dev/null || true
+      done
+      aws iam delete-role --role-name "$role" 2>/dev/null || true
+    done
+  done
+  for prefix in $policy_patterns; do
+    local policies
+    policies=$(aws iam list-policies --scope Local --output json 2>/dev/null | jq -r --arg p "$prefix" '.Policies[] | select(.PolicyName | startswith($p)) | .Arn' 2>/dev/null) || true
+    for arn in $policies; do
+      [ -z "$arn" ] && continue
+      echo "Deleting IAM policy (by name): $arn"
+      for version in $(aws iam list-policy-versions --policy-arn "$arn" --query 'Versions[?IsDefault==`false`].VersionId' --output text 2>/dev/null); do
+        aws iam delete-policy-version --policy-arn "$arn" --version-id "$version" 2>/dev/null || true
+      done
+      aws iam delete-policy --policy-arn "$arn" 2>/dev/null || true
+    done
+  done
+}
+
 # Run in dependency order
 delete_ec2_instances
 sleep 10
@@ -262,5 +299,6 @@ delete_secretsmanager_secrets
 delete_s3_buckets
 delete_ec2_sgs_vpc_subnets_igw
 delete_iam_roles_and_policies
+delete_iam_awsgoat_by_name
 
 echo "Tag-based cleanup (Project=AWSGoat) completed."

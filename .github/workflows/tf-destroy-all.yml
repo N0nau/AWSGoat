@@ -84,13 +84,27 @@ jobs:
       - name: Delete state bucket (bootstrap S3)
         run: |
           BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}-${{ env.AWS_REGION }}"
-          if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
-            echo "Emptying and deleting state bucket: $BUCKET"
-            aws s3 rb "s3://${BUCKET}" --force
-            echo "State bucket deleted."
-          else
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
             echo "State bucket $BUCKET does not exist; skipping."
+            exit 0
           fi
+          echo "Emptying versioned state bucket: $BUCKET"
+          while true; do
+            out=$(aws s3api list-object-versions --bucket "$BUCKET" --output json 2>/dev/null) || break
+            echo "$out" | jq -c '.Versions[]? | {Key, VersionId}' 2>/dev/null | while read -r obj; do
+              [ -z "$obj" ] && continue
+              aws s3api delete-object --bucket "$BUCKET" --key "$(echo "$obj" | jq -r .Key)" --version-id "$(echo "$obj" | jq -r .VersionId)" 2>/dev/null || true
+            done
+            echo "$out" | jq -c '.DeleteMarkers[]? | {Key, VersionId}' 2>/dev/null | while read -r obj; do
+              [ -z "$obj" ] && continue
+              aws s3api delete-object --bucket "$BUCKET" --key "$(echo "$obj" | jq -r .Key)" --version-id "$(echo "$obj" | jq -r .VersionId)" 2>/dev/null || true
+            done
+            has_more=$(echo "$out" | jq -r '.Versions | length + (.DeleteMarkers | length)')
+            [ "${has_more:-0}" -eq 0 ] && break
+          done
+          echo "Deleting bucket: $BUCKET"
+          aws s3 rb "s3://${BUCKET}" --force 2>/dev/null || aws s3api delete-bucket --bucket "$BUCKET"
+          echo "State bucket deleted."
 
       - name: Delete all resources tagged Project=AWSGoat
         run: |
