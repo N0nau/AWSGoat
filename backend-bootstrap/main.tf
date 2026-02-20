@@ -5,7 +5,7 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  bucket_name = "do-not-delete-awsgoat-state-files-${data.aws_caller_identity.current.account_id}"
+  bucket_name = "do-not-delete-awsgoat-state-files-${data.aws_caller_identity.current.account_id}-${var.region}"
 }
 
 resource "aws_s3_bucket" "tf_state" {

@@ -37,13 +37,14 @@ jobs:
         id: account
         run: |
           echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
-          echo "AWS_REGION=${{ github.event.inputs.region || env.AWS_REGION || 'eu-west-3' }}" >> $GITHUB_ENV
-          aws configure set region ${{ env.AWS_REGION }}
+          REGION="${{ github.event.inputs.region || env.AWS_REGION || 'eu-west-3' }}"
+          echo "AWS_REGION=$REGION" >> $GITHUB_ENV
+          aws configure set region "$REGION"
 
       - name: List workspaces (S3 backend keys)
         id: list-workspaces
         run: |
-          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}"
+          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}-${{ env.AWS_REGION }}"
           aws s3 ls "s3://${BUCKET}/" --recursive --output text 2>/dev/null | awk '{print $4}' | while read -r key; do
             if [[ "$key" == *"/env:/"*"/terraform.tfstate" ]]; then
               mod="${key%%/env:*}"
@@ -57,7 +58,7 @@ jobs:
 
       - name: Destroy all (module-1 and module-2, each workspace)
         run: |
-          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}"
+          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}-${{ env.AWS_REGION }}"
           ROOT="$GITHUB_WORKSPACE"
 
           if [ ! -s "$ROOT/workspace_list.txt" ]; then
@@ -82,7 +83,7 @@ jobs:
 
       - name: Delete state bucket (bootstrap S3)
         run: |
-          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}"
+          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}-${{ env.AWS_REGION }}"
           if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
             echo "Emptying and deleting state bucket: $BUCKET"
             aws s3 rb "s3://${BUCKET}" --force

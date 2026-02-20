@@ -3449,7 +3449,7 @@ resource "aws_s3_object" "upload_temp_object_2" {
 /* Creating a S3 Bucket for Terraform state file upload. Only for default deployment; multi-student deployments share this bucket (state key per student). */
 resource "aws_s3_bucket" "bucket_tf_files" {
   count         = var.student_id == "default" ? 1 : 0
-  bucket        = "do-not-delete-awsgoat-state-files-${data.aws_caller_identity.current.account_id}"
+  bucket        = "do-not-delete-awsgoat-state-files-${data.aws_caller_identity.current.account_id}-${var.region}"
   force_destroy = true
   tags = merge(local.common_tags, {
     Name        = "Do not delete Bucket"

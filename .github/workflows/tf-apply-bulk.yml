@@ -67,14 +67,15 @@ jobs:
           aws configure set region "$REGION"
       - name: Create state bucket if missing
         run: |
-          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}"
+          REGION="${{ github.event.inputs.region || env.AWS_REGION || 'eu-west-3' }}"
+          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}-${REGION}"
           if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
-            echo "State bucket already exists: $BUCKET"
+            echo "State bucket already exists: $BUCKET (region $REGION)"
           else
             cd backend-bootstrap
             terraform init -input=false
-            terraform apply -auto-approve -input=false -var="region=${{ env.AWS_REGION }}"
-            echo "State bucket created: $BUCKET"
+            terraform apply -auto-approve -input=false -var="region=$REGION"
+            echo "State bucket created: $BUCKET in region $REGION"
           fi
 
   terraform:
@@ -115,18 +116,19 @@ jobs:
 
       - name: Ensure state bucket exists
         run: |
-          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}"
+          REGION="${{ github.event.inputs.region || env.AWS_REGION || 'eu-west-3' }}"
+          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}-${REGION}"
           if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
             cd backend-bootstrap
             terraform init -input=false
-            terraform apply -auto-approve -input=false -var="region=${{ env.AWS_REGION }}"
+            terraform apply -auto-approve -input=false -var="region=$REGION"
           fi
 
       - name: Terraform Init (S3 backend)
         run: |
           cd modules/${{ github.event.inputs.module }}
           terraform init -reconfigure -input=false \
-            -backend-config="bucket=do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}" \
+            -backend-config="bucket=do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}-${{ env.AWS_REGION }}" \
             -backend-config="key=terraform.tfstate" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="workspace_key_prefix=${{ github.event.inputs.module }}"

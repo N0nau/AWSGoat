@@ -2,7 +2,7 @@
 
 Creates the S3 bucket used by **module-1** and **module-2** for [remote state](https://developer.hashicorp.com/terraform/language/state/remote).
 
-- **Bucket name:** `do-not-delete-awsgoat-state-files-<account_id>`
+- **Bucket name:** `do-not-delete-awsgoat-state-files-<account_id>-<region>` (one bucket per region)
 - **Versioning:** enabled (recommended for state recovery)
 - **Public access:** blocked
 
