@@ -35,8 +35,9 @@ resource "aws_lambda_function" "react_lambda_app" {
   function_name = "blog-application${local.name_suffix}"
   handler       = "index.handler"
   runtime       = "nodejs18.x"
-  role       = aws_iam_role.blog_app_lambda.arn
-  depends_on = [data.archive_file.lambda_zip, null_resource.file_replacement_lambda_react]
+  role          = aws_iam_role.blog_app_lambda.arn
+  tags          = merge(local.common_tags, { Name = "blog-application${local.name_suffix}" })
+  depends_on    = [data.archive_file.lambda_zip, null_resource.file_replacement_lambda_react]
 }
 
 
@@ -75,6 +76,11 @@ resource "aws_iam_role_policy_attachment" "ba_lambda_attach_3" {
 
 resource "aws_api_gateway_rest_api" "api" {
   name = "blog-application${local.name_suffix}"
+
+  tags = merge(local.common_tags, {
+    Name = "blog-application${local.name_suffix}"
+  })
+
   endpoint_configuration {
     types = [
       "REGIONAL"
@@ -182,6 +188,11 @@ resource "aws_api_gateway_stage" "api" {
 resource "aws_api_gateway_rest_api" "apiLambda_ba" {
   name           = "blog-application-api${local.name_suffix}"
   api_key_source = "HEADER"
+
+  tags = merge(local.common_tags, {
+    Name = "blog-application-api${local.name_suffix}"
+  })
+
   endpoint_configuration {
     types = [
       "REGIONAL"
@@ -3095,8 +3106,9 @@ resource "aws_lambda_function" "lambda_ba_data" {
   function_name = "blog-application-data${local.name_suffix}"
   handler       = "lambda_function.lambda_handler"
   runtime       = "python3.9"
-  role       = aws_iam_role.blog_app_lambda_python.arn
-  depends_on = [data.archive_file.lambda_zip_bap]
+  role          = aws_iam_role.blog_app_lambda_python.arn
+  tags          = merge(local.common_tags, { Name = "blog-application-data${local.name_suffix}" })
+  depends_on    = [data.archive_file.lambda_zip_bap]
   layers        = [aws_lambda_layer_version.lambda_layer.arn]
   memory_size   = "256"
   environment {
@@ -3633,6 +3645,7 @@ resource "aws_dynamodb_table" "users_table" {
   billing_mode   = "PROVISIONED"
   read_capacity  = 2
   write_capacity = 2
+  tags           = merge(local.common_tags, { Name = "blog-users${local.name_suffix}" })
 
   hash_key = "email"
   attribute {
@@ -3645,6 +3658,7 @@ resource "aws_dynamodb_table" "posts_table" {
   billing_mode   = "PROVISIONED"
   read_capacity  = 2
   write_capacity = 2
+  tags           = merge(local.common_tags, { Name = "blog-posts${local.name_suffix}" })
 
   hash_key = "id"
   attribute {

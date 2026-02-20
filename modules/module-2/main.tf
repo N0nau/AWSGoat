@@ -90,6 +90,7 @@ resource "aws_security_group" "ecs_sg" {
   name        = "ECS-SG${local.name_suffix}"
   description = "SG for cluster created from terraform"
   vpc_id      = aws_vpc.lab-vpc.id
+  tags        = merge(local.common_tags, { Name = "ECS-SG${local.name_suffix}" })
 
   ingress {
     from_port       = 0
@@ -162,6 +163,7 @@ resource "aws_db_instance" "database-instance" {
   availability_zone      = data.aws_availability_zones.available.names[0]
   db_subnet_group_name   = aws_db_subnet_group.database-subnet-group.name
   vpc_security_group_ids = [aws_security_group.database-security-group.id]
+  tags                   = merge(local.common_tags, { Name = "aws-goat-db${local.name_suffix}" })
 }
 
 
@@ -372,6 +374,7 @@ resource "aws_launch_template" "ecs_launch_template" {
   name_prefix   = "ecs-launch-template-${local.name_suffix}-"
   image_id      = data.aws_ami.ecs_optimized_ami.id
   instance_type = "t3.micro"
+  tags          = merge(local.common_tags, { Name = "ecs-launch-template${local.name_suffix}" })
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ecs-instance-profile.name
@@ -500,6 +503,7 @@ resource "aws_lb_listener" "listener" {
 resource "aws_secretsmanager_secret" "rds_creds" {
   name                    = "RDS_CREDS${local.name_suffix}"
   recovery_window_in_days = 0
+  tags                    = merge(local.common_tags, { Name = "RDS_CREDS${local.name_suffix}" })
 }
 
 resource "aws_secretsmanager_secret_version" "secret_version" {
