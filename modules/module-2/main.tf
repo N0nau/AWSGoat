@@ -33,8 +33,10 @@ resource "aws_vpc" "lab-vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
+
   tags = merge(local.common_tags, {
-    Name = "AWS_GOAT_VPC${local.name_suffix}"
+    Name    = "AWS_GOAT_VPC${local.name_suffix}"
+    Project = "AWSGoat"
   })
 }
 resource "aws_subnet" "lab-subnet-public-1" {
@@ -42,6 +44,10 @@ resource "aws_subnet" "lab-subnet-public-1" {
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
   availability_zone       = data.aws_availability_zones.available.names[0]
+
+  tags = merge(local.common_tags, {
+    Name = "lab-subnet-public-1${local.name_suffix}"
+  })
 }
 resource "aws_internet_gateway" "my_vpc_igw" {
   vpc_id = aws_vpc.lab-vpc.id
@@ -70,6 +76,10 @@ resource "aws_subnet" "lab-subnet-public-1b" {
   cidr_block              = "10.0.128.0/24"
   availability_zone       = data.aws_availability_zones.available.names[1]
   map_public_ip_on_launch = true
+
+  tags = merge(local.common_tags, {
+    Name = "lab-subnet-public-1b${local.name_suffix}"
+  })
 }
 resource "aws_route_table_association" "my_vpc_us_east_1b_public" {
   subnet_id      = aws_subnet.lab-subnet-public-1b.id
@@ -459,6 +469,7 @@ resource "aws_alb" "application_load_balancer" {
 
   tags = merge(local.common_tags, {
     Name = "aws-goat-m2-alb${local.name_suffix}"
+    Project = "AWSGoat"
   })
 }
 
