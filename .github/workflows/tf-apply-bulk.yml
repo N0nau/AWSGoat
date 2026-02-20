@@ -111,6 +111,15 @@ jobs:
           echo "AWS_REGION=${{ github.event.inputs.region || env.AWS_REGION || 'eu-west-3' }}" >> $GITHUB_ENV
           aws configure set region ${{ env.AWS_REGION }}
 
+      - name: Ensure state bucket exists
+        run: |
+          BUCKET="do-not-delete-awsgoat-state-files-${{ env.ACCOUNT_ID }}"
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            cd backend-bootstrap
+            terraform init -input=false
+            terraform apply -auto-approve -input=false -var="region=${{ env.AWS_REGION }}"
+          fi
+
       - name: Terraform Init (S3 backend)
         run: |
           cd modules/${{ github.event.inputs.module }}
